@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alien Tic-Tac-Toe</title>
+<style>
+  :root {
+    --bg: #0d1021;
+    --panel: #171b33;
+    --panel-2: #20264a;
+    --text: #eef0ff;
+    --muted: #a9aed6;
+    --accent: #7cf29a;
+    --alien: #ff7ab8;
+    --focus: #ffd84d;
+    --line: #343b6e;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 20% 0, #1c2250 0, var(--bg) 480px) no-repeat var(--bg);
+    color: var(--text);
+    font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; letter-spacing: .02em; }
+  h2 { font-size: 1.25rem; margin: 0 0 8px; }
+  p { margin: 0 0 12px; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  table.counters { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
+  .counters th, .counters td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .counters th { color: var(--muted); font-weight: 600; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: #0b1a10; border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .toolbar { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .prompt { font-weight: 600; min-height: 1.5em; }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-width: 330px;
+    margin: 0 auto;
+  }
+  .cell {
+    aspect-ratio: 1 / 1;
+    font-size: 2.6rem;
+    padding: 0;
+    border-radius: 12px;
+  }
+  .cell.x { color: var(--accent); }
+  .cell.o { color: var(--alien); }
+  .cell.pending { border: 2px dashed var(--focus); }
+  .cell:disabled { opacity: 1; cursor: default; }
+  .health { display: flex; gap: 16px; font-weight: 600; margin-bottom: 8px; }
+  .health .you { color: var(--accent); }
+  .health .them { color: var(--alien); }
+  .attack { font-size: 1.15rem; margin-bottom: 12px; }
+  .attack strong { color: var(--alien); }
+  .feedback { min-height: 1.5em; color: var(--muted); margin-top: 12px; }
+  .result { font-size: 1.3rem; font-weight: 700; margin-bottom: 10px; }
+  [hidden] { display: none !important; }
+  dialog {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    max-width: 480px;
+    width: calc(100% - 32px);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .6); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Alien Tic-Tac-Toe</h1>
+  <p class="sub">Win battles to claim squares. Three X in a line saves the day.</p>
+
+  <!-- Instructions -->
+  <section id="intro" class="panel" aria-labelledby="intro-title">
+    <h2 id="intro-title">How to play</h2>
+    <div class="howto">
+      <p>Get three <strong>X</strong> marks in a row, column or diagonal.</p>
+      <p>Choose an empty square to battle an alien for it. Each side starts with 2 health. The alien attacks; you pick the counter.</p>
+      <table class="counters">
+        <thead><tr><th scope="col">Alien attacks with</th><th scope="col">You counter with</th></tr></thead>
+        <tbody>
+          <tr><td>Laser</td><td>Shield</td></tr>
+          <tr><td>Shield</td><td>Blast</td></tr>
+          <tr><td>Claw</td><td>Dodge</td></tr>
+        </tbody>
+      </table>
+      <p>Right counter: the alien loses 1 health. Wrong counter: you lose 1 health. Win the battle to place X; lose it and the alien places O. Three O in a line and the aliens win.</p>
+    </div>
+    <button id="start" class="primary" type="button">Start</button>
+  </section>
+
+  <!-- Game -->
+  <section id="game" hidden aria-label="Game">
+    <div class="toolbar">
+      <button id="help" type="button">Help</button>
+      <button id="restart" type="button">Restart game</button>
+    </div>
+
+    <div class="panel">
+      <p id="board-prompt" class="prompt" aria-live="polite">Choose an empty square</p>
+      <div id="board" class="board" role="group" aria-label="Tic-tac-toe board"></div>
+    </div>
+
+    <!-- Battle -->
+    <div id="battle" class="panel" hidden aria-live="polite">
+      <h2 id="battle-title">Battle</h2>
+      <div class="health">
+        <span class="you" id="you-health">You: 2 of 2</span>
+        <span class="them" id="alien-health">Alien: 2 of 2</span>
+      </div>
+      <p class="attack" id="attack">The alien attacks with <strong>Laser</strong>.</p>
+      <div class="row" id="responses">
+        <button type="button" data-response="Shield">Shield</button>
+        <button type="button" data-response="Blast">Blast</button>
+        <button type="button" data-response="Dodge">Dodge</button>
+      </div>
+      <p class="feedback" id="feedback"></p>
+      <div class="row">
+        <button id="next" type="button" class="primary" hidden>Next exchange</button>
+      </div>
+    </div>
+
+    <!-- Battle summary -->
+    <div id="summary" class="panel" hidden aria-live="polite">
+      <p class="result" id="summary-text"></p>
+      <p id="summary-detail"></p>
+      <button id="return" type="button" class="primary">Return to board</button>
+    </div>
+
+    <!-- Game over -->
+    <div id="over" class="panel" hidden aria-live="polite">
+      <p class="result" id="over-text"></p>
+      <p id="over-detail"></p>
+      <button id="again" type="button" class="primary">Play again</button>
+    </div>
+  </section>
+
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <h2 id="help-title">How to play</h2>
+    <div id="help-body"></div>
+    <button id="help-close" type="button" class="primary">Close help</button>
+  </dialog>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ----- Rules -----
+  var ALIEN_MOVES = ["Laser", "Shield", "Claw"];
+  var COUNTERS = { Laser: "Shield", Shield: "Blast", Claw: "Dodge" };
+  var LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
+  ];
+  var START_HEALTH = 2;
+
+  // ----- State -----
+  var state;
+  function freshState() {
+    return {
+      phase: "intro",        // intro | board | battle | summary | over
+      cells: Array(9).fill(""),
+      battle: null
+    };
+  }
+
+  function lineWinner(cells) {
+    for (var i = 0; i < LINES.length; i++) {
+      var a = cells[LINES[i][0]];
+      if (a && a === cells[LINES[i][1]] && a === cells[LINES[i][2]]) return a;
+    }
+    return "";
+  }
+
+  // ----- Actions -----
+  function start() {
+    if (state.phase !== "intro") return;
+    state.phase = "board";
+    render();
+    focusFirstEmpty();
+  }
+
+  function chooseCell(index) {
+    if (state.phase !== "board" || state.cells[index]) return;
+    state.phase = "battle";
+    state.battle = {
+      cell: index,
+      player: START_HEALTH,
+      alien: START_HEALTH,
+      exchange: 0,
+      answered: false,
+      feedback: ""
+    };
+    render();
+    document.querySelector("#responses button").focus();
+  }
+
+  function respond(choice) {
+    var b = state.battle;
+    if (state.phase !== "battle" || !b || b.answered) return;
+    b.answered = true;
+    var attack = ALIEN_MOVES[b.exchange];
+    var counter = COUNTERS[attack];
+    if (choice === counter) {
+      b.alien -= 1;
+      b.feedback = choice + " counters " + attack + ". Alien loses 1 health.";
+    } else {
+      b.player -= 1;
+      b.feedback = choice + " does not counter " + attack + " (" + counter + " does). You lose 1 health.";
+    }
+    if (b.player === 0 || b.alien === 0) {
+      resolveBattle(b.alien === 0 ? "X" : "O");
+    } else {
+      render();
+      els.next.focus();
+    }
+  }
+
+  function nextExchange() {
+    var b = state.battle;
+    if (state.phase !== "battle" || !b || !b.answered || b.player === 0 || b.alien === 0) return;
+    b.exchange += 1;
+    b.answered = false;
+    b.feedback = "";
+    render();
+    document.querySelector("#responses button").focus();
+  }
+
+  function resolveBattle(mark) {
+    var b = state.battle;
+    state.cells[b.cell] = mark;
+    state.lastBattle = { mark: mark, cell: b.cell, feedback: b.feedback };
+    state.battle = null;
+
+    var winner = lineWinner(state.cells);
+    if (winner || state.cells.every(Boolean)) {
+      state.phase = "over";
+      state.result = winner === "X" ? "win" : winner === "O" ? "lose" : "draw";
+      render();
+      els.again.focus();
+    } else {
+      state.phase = "summary";
+      render();
+      els.ret.focus();
+    }
+  }
+
+  function returnToBoard() {
+    if (state.phase !== "summary") return;
+    state.phase = "board";
+    render();
+    focusFirstEmpty();
+  }
+
+  function playAgain() {
+    if (state.phase !== "over") return;
+    state = freshState();
+    state.phase = "board";
+    render();
+    focusFirstEmpty();
+  }
+
+  function restart() {
+    if (state.phase === "intro") return;
+    state = freshState();
+    state.phase = "board";
+    render();
+    focusFirstEmpty();
+  }
+
+  // ----- Rendering -----
+  var els = {
+    intro: document.getElementById("intro"),
+    game: document.getElementById("game"),
+    board: document.getElementById("board"),
+    prompt: document.getElementById("board-prompt"),
+    battle: document.getElementById("battle"),
+    battleTitle: document.getElementById("battle-title"),
+    you: document.getElementById("you-health"),
+    alien: document.getElementById("alien-health"),
+    attack: document.getElementById("attack"),
+    responses: document.querySelectorAll("#responses button"),
+    feedback: document.getElementById("feedback"),
+    next: document.getElementById("next"),
+    summary: document.getElementById("summary"),
+    summaryText: document.getElementById("summary-text"),
+    summaryDetail: document.getElementById("summary-detail"),
+    ret: document.getElementById("return"),
+    over: document.getElementById("over"),
+    overText: document.getElementById("over-text"),
+    overDetail: document.getElementById("over-detail"),
+    again: document.getElementById("again")
+  };
+
+  var cellButtons = [];
+  for (var i = 0; i < 9; i++) {
+    (function (index) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cell";
+      btn.addEventListener("click", function () { chooseCell(index); });
+      els.board.appendChild(btn);
+      cellButtons.push(btn);
+    })(i);
+  }
+
+  function cellName(index) {
+    return "Row " + (Math.floor(index / 3) + 1) + ", column " + (index % 3 + 1);
+  }
+
+  function focusFirstEmpty() {
+    var idx = state.cells.indexOf("");
+    if (idx >= 0) cellButtons[idx].focus();
+  }
+
+  function render() {
+    var s = state;
+    els.intro.hidden = s.phase !== "intro";
+    els.game.hidden = s.phase === "intro";
+
+    var pending = s.battle ? s.battle.cell : -1;
+    cellButtons.forEach(function (btn, idx) {
+      var mark = s.cells[idx];
+      btn.textContent = mark;
+      btn.className = "cell" + (mark === "X" ? " x" : mark === "O" ? " o" : "") + (idx === pending ? " pending" : "");
+      var status = mark ? "occupied by " + mark : idx === pending ? "battle in progress" : "empty";
+      btn.setAttribute("aria-label", cellName(idx) + ", " + status);
+      btn.disabled = s.phase !== "board" || !!mark;
+    });
+
+    els.prompt.textContent =
+      s.phase === "board" ? "Choose an empty square" :
+      s.phase === "battle" ? "Battle in progress for " + cellName(pending).toLowerCase() :
+      s.phase === "summary" ? "Battle over" :
+      s.phase === "over" ? "Game over" : "";
+
+    // Battle panel
+    els.battle.hidden = s.phase !== "battle";
+    if (s.phase === "battle") {
+      var b = s.battle;
+      els.battleTitle.textContent = "Battle for " + cellName(b.cell).toLowerCase();
+      els.you.textContent = "You: " + b.player + " of " + START_HEALTH;
+      els.alien.textContent = "Alien: " + b.alien + " of " + START_HEALTH;
+      els.attack.innerHTML = "Exchange " + (b.exchange + 1) + ": the alien attacks with <strong>" + ALIEN_MOVES[b.exchange] + "</strong>.";
+      els.responses.forEach(function (btn) { btn.disabled = b.answered; });
+      els.feedback.textContent = b.feedback;
+      els.next.hidden = !b.answered;
+    }
+
+    // Summary panel
+    els.summary.hidden = s.phase !== "summary";
+    if (s.phase === "summary") {
+      var lb = s.lastBattle;
+      els.summaryText.textContent = lb.mark === "X" ? "Battle won" : "Battle lost";
+      els.summaryDetail.textContent = lb.feedback + " " +
+        (lb.mark === "X" ? "You claim " : "The alien claims ") + cellName(lb.cell).toLowerCase() + " with " + lb.mark + ".";
+    }
+
+    // Game over panel
+    els.over.hidden = s.phase !== "over";
+    if (s.phase === "over") {
+      var lastWord = s.lastBattle.mark === "X" ? "Battle won. " : "Battle lost. ";
+      if (s.result === "win") {
+        els.overText.textContent = "Board won! You won";
+        els.overDetail.textContent = lastWord + "Three X in a line. The planet is safe.";
+      } else if (s.result === "lose") {
+        els.overText.textContent = "The aliens won";
+        els.overDetail.textContent = lastWord + "Three O in a line. Try again?";
+      } else {
+        els.overText.textContent = "Draw";
+        els.overDetail.textContent = lastWord + "The board is full with no line of three.";
+      }
+    }
+  }
+
+  // ----- Help -----
+  var dialog = document.getElementById("help-dialog");
+  document.getElementById("help-body").innerHTML = document.querySelector("#intro .howto").innerHTML;
+  var helpReturnFocus = null;
+  document.getElementById("help").addEventListener("click", function () {
+    helpReturnFocus = document.activeElement;
+    dialog.showModal();
+  });
+  document.getElementById("help-close").addEventListener("click", function () { dialog.close(); });
+  dialog.addEventListener("close", function () { if (helpReturnFocus) helpReturnFocus.focus(); });
+
+  // ----- Wiring -----
+  document.getElementById("start").addEventListener("click", start);
+  els.responses.forEach(function (btn) {
+    btn.addEventListener("click", function () { respond(btn.getAttribute("data-response")); });
+  });
+  els.next.addEventListener("click", nextExchange);
+  els.ret.addEventListener("click", returnToBoard);
+  els.again.addEventListener("click", playAgain);
+  document.getElementById("restart").addEventListener("click", restart);
+
+  state = freshState();
+  render();
+
+  // Read-only hook for automated checks
+  window.__alienGame = { getState: function () { return JSON.parse(JSON.stringify(state)); } };
+})();
+</script>
+</body>
+</html>
