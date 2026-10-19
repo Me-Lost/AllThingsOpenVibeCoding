@@ -23,8 +23,9 @@ Tested 2026-10-19 in a headless Chrome browser (desktop and phone-sized screen),
 | Phone: tap works, no sideways scrolling | Passed |
 | No errors in the browser console | Passed |
 | Partner playtest with a real person | Not tested |
-| Live site on Vercel | Not tested |
+| Live site on Vercel loads publicly, no login (https://allthingsopenvibecoding-my-first-ga.vercel.app/) | Passed |
+| Full game played on the live site | Not tested |
 
 ## Still to do
 - Partner playtest: watch someone play without help and note where they get stuck.
-- Publish on Vercel and check the live link.
+- Play one full game on the live site, on a computer and on a phone.
